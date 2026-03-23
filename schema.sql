@@ -83,3 +83,12 @@ CREATE TABLE order_items (
   FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
   FOREIGN KEY (product_article) REFERENCES products(article)
 );
+
+CREATE TABLE IF NOT EXISTS orders (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  product_article TEXT,
+  status TEXT,
+  pickup_point TEXT,
+  order_date TEXT,
+  delivery_date TEXT
+);

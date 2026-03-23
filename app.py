@@ -6,7 +6,9 @@ from tkinter import messagebox, filedialog
 from tkinter import font as tkfont
 from PIL import Image, ImageTk
 
-DB_PATH = "store.db"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "store.db")
+
 RES_DIR = "resources"
 PLACEHOLDER = os.path.join(RES_DIR, "picture.png")
 
@@ -408,6 +410,124 @@ class ProductForm(tk.Toplevel):
         self.destroy()
 
 
+class OrdersUI(tk.Toplevel):
+    def __init__(self, root):
+        super().__init__(root)
+        self.title("Заказы")
+        self.geometry("600x400")
+
+        tk.Label(self, text="Список заказов", font=("Arial", 16)).pack(pady=10)
+
+        self.orders_list = tk.Listbox(self, width=80)
+        self.orders_list.pack(pady=10, fill="both", expand=True)
+
+        self.load_orders()
+
+        btns = tk.Frame(self)
+        btns.pack(pady=5)
+
+        tk.Button(btns, text="Добавить заказ", command=self.add_order).pack(side="left")
+        tk.Button(btns, text="Удалить заказ", command=self.delete_order).pack(
+            side="left", padx=5
+        )
+        tk.Button(btns, text="Редактировать заказ", command=self.edit_order).pack(
+            side="left", padx=5
+        )
+
+    def load_orders(self):
+        self.orders_list.delete(0, tk.END)
+
+        conn = sqlite3.connect(DB_PATH)
+        cur = conn.cursor()
+
+        cur.execute("SELECT * FROM orders")
+        rows = cur.fetchall()
+        conn.close()
+
+        for row in rows:
+            oid = row[0]
+            article = row[1] if len(row) > 1 else "N/A"
+            status = row[2] if len(row) > 2 else "N/A"
+            self.orders_list.insert(tk.END, f"#{oid} | {article} | {status}")
+
+    def add_order(self):
+        conn = sqlite3.connect(DB_PATH)
+        cur = conn.cursor()
+
+        cur.execute(
+            """
+        INSERT INTO orders(product_article, status, pickup_point, order_date, delivery_date)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+            ("TEST123", "Новый", "Москва", "2024-01-01", "2024-01-05"),
+        )
+
+        conn.commit()
+        conn.close()
+
+        self.load_orders()
+
+    def delete_order(self):
+        selection = self.orders_list.curselection()
+        if not selection:
+            messagebox.showwarning("Ошибка", "Выберите заказ")
+            return
+
+        selected_text = self.orders_list.get(selection[0])
+        order_id = int(selected_text.split("|")[0].replace("#", "").strip())
+
+        conn = sqlite3.connect(DB_PATH)
+        cur = conn.cursor()
+        cur.execute("DELETE FROM orders WHERE id=?", (order_id,))
+        conn.commit()
+        conn.close()
+
+        self.load_orders()
+
+    def edit_order(self):
+        selection = self.orders_list.curselection()
+        if not selection:
+            messagebox.showwarning("Ошибка", "Выберите заказ")
+            return
+
+        selected_text = self.orders_list.get(selection[0])
+        order_id = int(selected_text.split("|")[0].replace("#", "").strip())
+
+        conn = sqlite3.connect(DB_PATH)
+        cur = conn.cursor()
+
+        cur.execute("SELECT * FROM orders WHERE id=?", (order_id,))
+        order = cur.fetchone()
+        conn.close()
+
+        if not order:
+            return
+
+        # نافذة تعديل بسيطة
+        edit_win = tk.Toplevel(self)
+        edit_win.title("Редактировать заказ")
+        edit_win.geometry("300x250")
+
+        tk.Label(edit_win, text="Статус").pack()
+        status_entry = tk.Entry(edit_win)
+        status_entry.pack()
+        status_entry.insert(0, order[2])
+
+        def save_edit():
+            new_status = status_entry.get()
+
+            conn = sqlite3.connect(DB_PATH)
+            cur = conn.cursor()
+            cur.execute("UPDATE orders SET status=? WHERE id=?", (new_status, order_id))
+            conn.commit()
+            conn.close()
+
+            self.load_orders()
+            edit_win.destroy()
+
+        tk.Button(edit_win, text="Сохранить", command=save_edit).pack(pady=10)
+
+
 class ProductsUI:
     def __init__(self, user_name, role):
         self.user_name = user_name
@@ -490,6 +610,9 @@ class ProductsUI:
             )
             tk.Button(btns, text="🗑️ Удалить", command=self.delete_product).pack(
                 side="left"
+            )
+            tk.Button(btns, text="Заказы", command=self.open_orders).pack(
+                side="left", padx=5
             )
 
             hint = tk.Label(
@@ -701,6 +824,9 @@ class ProductsUI:
         conn.commit()
         conn.close()
         self.refresh()
+
+    def open_orders(self):
+        OrdersUI(self.window)
 
 
 def open_products_window(user_name, role):
